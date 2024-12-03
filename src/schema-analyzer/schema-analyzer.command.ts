@@ -1,45 +1,98 @@
 import { Command, CommandRunner, Option } from 'nest-commander';
-import { Injectable } from '@nestjs/common';
-import { SchemaAnalyzerService } from './schema-analyzer.service';
+import { AnalyzerService } from './services/analyzer.service';
 
-@Injectable()
+interface SchemaAnalyzerOptions {
+  uri?: string;
+  host?: string;
+  port?: number;
+  database?: string;
+  user?: string;
+  password?: string;
+  schema?: string;
+  llmtxt?: boolean;
+  outputPath?: string;
+}
+
 @Command({
-  name: 'analyze-schema',
-  description: 'Analyze a PostgreSQL database schema',
+  name: 'analyze',
+  description: 'Analyze database schema',
 })
 export class SchemaAnalyzerCommand extends CommandRunner {
-  constructor(private readonly schemaAnalyzerService: SchemaAnalyzerService) {
+  constructor(private readonly analyzerService: AnalyzerService) {
     super();
   }
 
   async run(
     passedParams: string[],
-    options: Record<string, any>,
+    options: SchemaAnalyzerOptions,
   ): Promise<void> {
-    console.log('Starting schema analysis...');
-    const { uri, schema, llmtxt } = options;
-    console.log(`Analyzing schema: ${schema}`);
-
-    this.schemaAnalyzerService.configure(uri, llmtxt);
-
     try {
-      if (llmtxt) {
-        const filePath = await this.schemaAnalyzerService.generateLLMsTxt();
-        console.log(`\nLLMs analysis saved to: ${filePath}`);
+      const config = this.parseConfig(options);
+
+      if (options.llmtxt) {
+        const outputPath = await this.analyzerService.generateLLMsTxt(config, options.outputPath);
+        console.log(`LLMs text generated at: ${outputPath}`);
       } else {
-        const guide = await this.schemaAnalyzerService.generateInsertionGuide();
-        console.log('\n=== Schema Analysis Report ===\n');
+        const guide = await this.analyzerService.generateInsertionGuide(config);
         console.log(guide);
       }
     } catch (error) {
-      console.error('Error during schema analysis:', error.message);
+      console.error('Error analyzing schema:', error.message);
+      process.exit(1);
     }
   }
 
   @Option({
-    flags: '-s, --schema <schema>',
-    description: 'Database schema to analyze',
-    defaultValue: 'public',
+    flags: '-u, --uri [string]',
+    description: 'Database connection URI',
+  })
+  parseUri(val: string): string {
+    return val;
+  }
+
+  @Option({
+    flags: '-h, --host [string]',
+    description: 'Database host',
+  })
+  parseHost(val: string): string {
+    return val;
+  }
+
+  @Option({
+    flags: '-p, --port [number]',
+    description: 'Database port',
+  })
+  parsePort(val: string): number {
+    return Number(val);
+  }
+
+  @Option({
+    flags: '-d, --database [string]',
+    description: 'Database name',
+  })
+  parseDatabase(val: string): string {
+    return val;
+  }
+
+  @Option({
+    flags: '--user [string]',
+    description: 'Database user',
+  })
+  parseUser(val: string): string {
+    return val;
+  }
+
+  @Option({
+    flags: '--password [string]',
+    description: 'Database password',
+  })
+  parsePassword(val: string): string {
+    return val;
+  }
+
+  @Option({
+    flags: '-s, --schema [string]',
+    description: 'Database schema (default: public)',
   })
   parseSchema(val: string): string {
     return val;
@@ -48,17 +101,50 @@ export class SchemaAnalyzerCommand extends CommandRunner {
   @Option({
     flags: '--llmtxt',
     description: 'Generate LLMs-friendly text output',
-    defaultValue: false,
   })
-  parseLLMsTxt(): boolean {
+  parseLlmtxt(): boolean {
     return true;
   }
 
   @Option({
-    flags: '-u, --uri <uri>',
-    description: 'Database connection URI',
+    flags: '-o, --output-path [string]',
+    description: 'Output path for generated files',
   })
-  parseUri(val: string): string {
+  parseOutputPath(val: string): string {
     return val;
+  }
+
+  private parseConfig(options: SchemaAnalyzerOptions) {
+    if (options.uri) {
+      return {
+        uri: options.uri,
+        schema: options.schema || 'public',
+        llmtxt: options.llmtxt || false,
+        ssl: {
+          rejectUnauthorized: false,
+          checkServerIdentity: () => undefined
+        }
+      };
+    }
+
+    if (!options.host || !options.database || !options.user || !options.password) {
+      throw new Error(
+        'Must provide either connection URI or host, database, user, and password',
+      );
+    }
+
+    return {
+      host: options.host,
+      port: options.port || 5432,
+      database: options.database,
+      user: options.user,
+      password: options.password,
+      schema: options.schema || 'public',
+      llmtxt: options.llmtxt || false,
+      ssl: {
+        rejectUnauthorized: false,
+        checkServerIdentity: () => undefined
+      }
+    };
   }
 }

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import { CommandFactory } from 'nest-commander';
-import { AppModule } from './app.module';
+import { SchemaAnalyzerModule } from './schema-analyzer/schema-analyzer.module';
 
 async function bootstrap() {
-  await CommandFactory.run(AppModule);
+  await CommandFactory.run(SchemaAnalyzerModule);
 }
 
 bootstrap();
