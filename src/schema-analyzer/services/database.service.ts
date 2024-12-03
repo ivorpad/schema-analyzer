@@ -17,9 +17,14 @@ export class DatabaseService {
         ssl: config.ssl
       });
       
-      // Extract database name from URI
-      const matches = config.uri.match(/\/([^/?]+)/);
-      this.dbName = matches ? matches[1] : 'unknown_db';
+      try {
+        // Safely extract database name from URI
+        const url = new URL(config.uri.replace('postgresql://', 'http://'));
+        this.dbName = url.pathname.split('/')[1]?.split('?')[0] || 'unknown_db';
+      } catch (error) {
+        console.warn('Could not parse database name from URI, using fallback');
+        this.dbName = 'unknown_db';
+      }
     } else {
       // For individual parameter connections
       this.pool = new Pool({
